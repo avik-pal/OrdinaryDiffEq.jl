@@ -60,14 +60,22 @@ function set_proposed_dt!(integrator::ODEIntegrator,integrator2::ODEIntegrator)
 end
 
 @inline function DiffEqBase.get_du(integrator::ODEIntegrator)
-  integrator.fsallast
+  return if isdefined(integrator, :fsallast)
+    integrator.fsallast
+  else
+    integrator(integrator.t, Val{1})
+  end
 end
 
 @inline function DiffEqBase.get_du!(out,integrator::ODEIntegrator)
   if typeof(integrator.cache) <: FunctionMapCache
     out .= integrator.cache.tmp
   else
-    out .= integrator.fsallast
+    return if isdefined(integrator, :fsallast)
+      out .= integrator.fsallast
+    else
+      integrator(out, integrator.t, Val{1})
+    end
   end
 end
 
@@ -110,7 +118,9 @@ function resize!(integrator::ODEIntegrator, i::Int)
   @unpack cache = integrator
 
   for c in full_cache(cache)
-    resize!(c,i)
+    # Skip nothings which may exist in the cache since extra variables
+    # may be required for things like units
+    c !== nothing && resize!(c,i)
   end
   resize_nlsolver!(integrator, i)
   resize_J_W!(cache, integrator, i)
@@ -138,12 +148,15 @@ function resize_J_W!(cache, integrator, i)
     nf = nlsolve_f(f, integrator.alg)
     islin = f isa Union{ODEFunction,SplitFunction} && islinear(nf.f)
     if !islin
-      J = similar(f.jac_prototype, i, i)
-      if !isa(J, DiffEqBase.AbstractDiffEqLinearOperator)
+      if isa(cache.J, DiffEqBase.AbstractDiffEqLinearOperator)
+        resize!(cache.J,i)
+      else
+        J = similar(f.jac_prototype, i, i)
         J = DiffEqArrayOperator(J; update_func=f.jac)
       end
-
-      cache.W = WOperator(f.mass_matrix, integrator.dt, J, true)
+      cache.W = WOperator{DiffEqBase.isinplace(integrator.sol.prob)}(
+                          f.mass_matrix, integrator.dt, cache.J, integrator.u;
+                          transform = cache.W.transform)
       cache.J = cache.W.J
     end
   else
@@ -284,12 +297,16 @@ function DiffEqBase.reinit!(integrator::ODEIntegrator,u0 = integrator.sol.prob.u
       resize!(integrator.sol.alg_choice,resize_start)
     end
     integrator.saveiter = resize_start
+    if integrator.opts.dense
+      integrator.saveiter_dense = resize_start
+    end
   end
   integrator.iter = 0
   integrator.success_iter = 0
   integrator.u_modified = false
 
   # full re-initialize the PI in timestepping
+  reinit!(integrator, integrator.opts.controller)
   integrator.qold = integrator.opts.qoldinit
   integrator.q11 = typeof(integrator.q11)(1)
   integrator.erracc = typeof(integrator.erracc)(1)
