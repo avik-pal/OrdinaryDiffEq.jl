@@ -1,0 +1,18 @@
+[Core]
+versions = ["lts", "1", "pre"]
+
+# Weak-convergence Monte-Carlo studies — too expensive to run on every
+# upstream-dependency change, so marked local_only. See
+# compute_affected_sublibraries.jl.
+[SROCKC2WeakConvergence]
+versions = ["1"]
+timeout = 240
+local_only = true
+
+[SROCK2NonDiagonalConvergence]
+versions = ["1"]
+timeout = 240
+local_only = true
+
+[QA]
+versions = ["lts", "1"]

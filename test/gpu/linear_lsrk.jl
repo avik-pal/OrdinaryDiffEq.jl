@@ -1,4 +1,5 @@
 using OrdinaryDiffEq, CUDA, Test
+using OrdinaryDiffEqLowStorageRK: ORK256, CarpenterKennedy2N54, SHLDDRK64, DGLDDRK73_C
 CUDA.allowscalar(false)
 N = 256
 # Define the initial condition as normal arrays
@@ -8,7 +9,7 @@ gu0 = CuArray(Float32.(u0))
 
 # Define the discretized PDE as an ODE function
 function f(du, u, p, t)
-    @. du = u
+    return @. du = u
 end
 prob = ODEProblem{true, SciMLBase.FullSpecialize}(f, u0, (0.0f0, 10.0f0))
 prob2 = ODEProblem{true, SciMLBase.FullSpecialize}(f, gu0, (0.0f0, 10.0f0))
@@ -30,5 +31,5 @@ for alg in algs
     println("GPU Times for $alg")
     @time sol2 = solve(prob2, alg, save_everystep = false, save_start = false, dt = 0.01)
 
-    @test sol[end] ≈ Array(sol2[end])
+    @test sol.u[end] ≈ Array(sol2.u[end])
 end

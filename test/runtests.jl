@@ -1,170 +1,350 @@
 using Pkg
 using SafeTestsets, Test
-const LONGER_TESTS = false
+using SciMLTesting
 
-const GROUP = get(ENV, "GROUP", "All")
+const LONGER_TESTS = false
 const is_APPVEYOR = Sys.iswindows() && haskey(ENV, "APPVEYOR")
 
-function activate_downstream_env()
-    Pkg.activate("downstream")
-    Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
-    Pkg.instantiate()
+const GROUP = current_group()
+const LIB_DIR = joinpath(dirname(@__DIR__), "lib")
+
+# Folder-based v1.2 layout: each functional group's test files live in its own
+# `test/<GroupKey>/` folder (matching the test_groups.toml key casing). The group
+# bodies below `@safetestset include` the files from those folders, reproducing the
+# corresponding `if GROUP == ...` branch of the previous hand-written runtests.jl
+# verbatim (same files, same order, same @safetestset isolation, same version /
+# is_APPVEYOR guards). They are passed to `run_tests` as 0-arg thunks so the version
+# gates survive (folder-discovery mode cannot express them) and so the `@safetestset`
+# macros resolve against the `using SafeTestsets` in this module's scope.
+
+function interface_i()
+    # Skip on Julia LTS (oneunit(Type{Any}) not defined) and pre-release (stalls)
+    # See: https://github.com/SciML/OrdinaryDiffEq.jl/issues/2979
+    if VERSION >= v"1.11" && isempty(VERSION.prerelease)
+        @time @safetestset "Null u0 Callbacks Tests" include("InterfaceI/null_u0_callbacks_test.jl")
+    end
+    @time @safetestset "Tstops Tests" include("InterfaceI/ode_tstops_tests.jl")
+    @time @safetestset "Tstop Callback Interpolation Tests" include("InterfaceI/tstop_callback_interpolation.jl")
+    @time @safetestset "Backwards Tests" include("InterfaceI/ode_backwards_test.jl")
+    @time @safetestset "Initdt Tests" include("InterfaceI/ode_initdt_tests.jl")
+    @time @safetestset "Linear Tests" include("InterfaceI/ode_twodimlinear_tests.jl")
+    @time @safetestset "Inf Tests" include("InterfaceI/inf_handling.jl")
+    @time @safetestset "saveat Tests" include("InterfaceI/ode_saveat_tests.jl")
+    @time @safetestset "save_idxs Tests" include("InterfaceI/ode_saveidxs_tests.jl")
+    @time @safetestset "Scalar Handling Tests" include("InterfaceI/scalar_handling_tests.jl")
+    @time @safetestset "Static Array Tests" include("InterfaceI/static_array_tests.jl")
+    @time @safetestset "derivative_discontinuity Tests" include("InterfaceI/derivative_discontinuity_test.jl")
+    @time @safetestset "Composite Algorithm Tests" include("InterfaceI/composite_algorithm_test.jl")
+    @time @safetestset "Complex Tests" include("InterfaceI/complex_tests.jl")
+    @time @safetestset "Ndim Complex Tests" include("InterfaceI/ode_ndim_complex_tests.jl")
+    @time @safetestset "Number Type Tests" include("InterfaceI/ode_numbertype_tests.jl")
+    @time @safetestset "Interpolation Output Type Tests" include("InterfaceI/interpolation_output_types.jl")
+    @time @safetestset "Initial Interpolation Tests" include("InterfaceI/initial_interpolation_tests.jl")
+    @time @safetestset "Stiffness Detection Tests" include("InterfaceI/stiffness_detection_test.jl")
+    @time @safetestset "Composite Interpolation Tests" include("InterfaceI/composite_interpolation.jl")
+    @time @safetestset "Export tests" include("InterfaceI/export_tests.jl")
+    @time @safetestset "Verbose Migration Tests" include("InterfaceI/verbose_migration_tests.jl")
+    @time @safetestset "Threading Option Public Tests" include("InterfaceI/threading_option_public_tests.jl")
+    @time @safetestset "Generic SciML Interface Tests" include("InterfaceI/generic_interface_tests.jl")
+    @time @safetestset "Default Linear Interpolation Tests" include("InterfaceI/default_linear_interpolation_tests.jl")
+    @time @safetestset "Type Handling Tests" include("InterfaceI/type_handling.jl")
+    @time @safetestset "Controller Tests" include("InterfaceI/controllers.jl")
+    @time @safetestset "Inplace Interpolation Tests" include("InterfaceI/inplace_interpolation.jl")
+    @time @safetestset "Algebraic Interpolation Tests" include("InterfaceI/algebraic_interpolation.jl")
+    @time @safetestset "Interpolation and Cache Stripping Tests" include("InterfaceI/ode_strip_test.jl")
+    @time @safetestset "Public API Package Splits" include("InterfaceI/public_api_package_split.jl")
+    @time @safetestset "Aliasing Tests" include("InterfaceI/aliasing_tests.jl")
+    return @time @safetestset "Solution Memory Release" include("InterfaceI/solution_memory_tests.jl")
 end
 
-#Start Test Script
+function interface_ii()
+    is_APPVEYOR && return
+    #@time @safetestset "No Recompile Tests" include("shared/norecompile.jl") # doesn't work on CI?
+    @time @safetestset "Despecialized Parameters" include("InterfaceII/despecialized_parameters.jl")
+    @time @safetestset "AutoSparse Detection Tests" include("InterfaceII/autosparse_detection_tests.jl")
+    @time @safetestset "Enum Tests" include("InterfaceII/enums.jl")
+    return @time @safetestset "Get du Tests" include("InterfaceII/get_du.jl")
+end
+
+function interface_iii()
+    is_APPVEYOR && return
+    @time @safetestset "Derivative Utilities Tests" include("InterfaceIII/utility_tests.jl")
+    @time @safetestset "stats Tests" include("InterfaceIII/stats_tests.jl")
+    @time @safetestset "No Index Tests" include("InterfaceIII/noindex_tests.jl")
+    @time @safetestset "Events + DAE addsteps Tests" include("InterfaceIII/event_dae_addsteps.jl")
+    @time @safetestset "Units Tests" include("InterfaceIII/units_tests.jl")
+    return @time @safetestset "DEVerbosity Tests" include("InterfaceIII/verbosity.jl")
+end
+
+function interface_iv()
+    is_APPVEYOR && return
+    @time @safetestset "Ambiguity Tests" include("InterfaceIV/ambiguity_tests.jl")
+    @time @safetestset "Precision Mixing Tests" include("InterfaceIV/precision_mixing.jl")
+    @time @safetestset "Sized Matrix Tests" include("InterfaceIV/sized_matrix_tests.jl")
+    return @time @safetestset "Second Order with First Order Solver Tests" include("InterfaceIV/second_order_with_first_order_solvers.jl")
+end
+
+function interface_v()
+    is_APPVEYOR && return
+    @time @safetestset "Interpolation Derivative Error Tests" include("InterfaceV/interpolation_derivative_error_tests.jl")
+    @time @safetestset "GPU DAE Mass Matrix Tests" include("InterfaceV/gpu_dae_mass_matrix_tests.jl")
+    return @time @safetestset "GPU AutoDiff Interface Tests" include("InterfaceV/gpu_autodiff_interface_tests.jl")
+end
+
+function integrators_i()
+    is_APPVEYOR && return
+    @time @safetestset "Reinit Tests" include("Integrators_I/reinit_test.jl")
+    @time @safetestset "Events Tests" include("Integrators_I/ode_event_tests.jl")
+    @time @safetestset "Alg Events Tests" include("Integrators_I/alg_events_tests.jl")
+    @time @safetestset "Discrete Callback Dual Tests" include("Integrators_I/discrete_callback_dual_test.jl")
+    @time @safetestset "Callback Allocation Tests" include("Integrators_I/callback_allocation_tests.jl")
+    @time @safetestset "Iterator Tests" include("Integrators_I/iterator_tests.jl")
+    @time @safetestset "Integrator Interface Tests" include("Integrators_I/integrator_interface_tests.jl")
+    @time @safetestset "Integrator Symbolic Interpolation Tests" include("Integrators_I/symbolic_interpolation_tests.jl")
+    @time @safetestset "Error Check Tests" include("Integrators_I/check_error.jl")
+    @time @safetestset "Event Detection Tests" include("Integrators_I/event_detection_tests.jl")
+    @time @safetestset "Event Repetition Detection Tests" include("Integrators_I/event_repeat_tests.jl")
+    @time @safetestset "Multi-VCC Mask Tests" include("Integrators_I/multi_vcc_mask_tests.jl")
+    @time @safetestset "Step Limiter Tests" include("Integrators_I/step_limiter_test.jl")
+    return @time @safetestset "Discontinuity Detection Tests" include("Integrators_I/disco_tests.jl")
+end
+
+function integrators_ii()
+    is_APPVEYOR && return
+    @time @safetestset "Integrator RNG Tests" include("Integrators_II/integrator_rng_tests.jl")
+    @time @safetestset "Reverse Directioned Event Tests" include("Integrators_II/rev_events_tests.jl")
+    @time @safetestset "Differentiation Direction Tests" include("Integrators_II/diffdir_tests.jl")
+    @time @safetestset "Resize Tests" include("Integrators_II/resize_tests.jl")
+    @time @safetestset "deleteat!/addat! Tests" include("Integrators_II/deleteat_addat_tests.jl")
+    @time @safetestset "Cache Tests" include("Integrators_II/ode_cache_tests.jl")
+    @time @safetestset "Add Steps Tests" include("Integrators_II/ode_add_steps_tests.jl")
+    return @time @safetestset "IMEX Split Function Tests" include("Integrators_II/split_ode_tests.jl")
+end
+
+function regression_i()
+    is_APPVEYOR && return
+    @time @safetestset "Dense Tests" include("Regression_I/ode_dense_tests.jl")
+    @time @safetestset "Special Interp Tests" include("Regression_I/special_interps.jl")
+    @time @safetestset "Inplace Tests" include("Regression_I/ode_inplace_tests.jl")
+    @time @safetestset "Adaptive Tests" include("Regression_I/ode_adaptive_tests.jl")
+    @time @safetestset "Hard DAE Tests" include("Regression_I/hard_dae.jl")
+    return @time @safetestset "Newton-Krylov Round-off Tests" include("Regression_I/newton_krylov_roundoff.jl")
+end
+
+function regression_ii()
+    is_APPVEYOR && return
+    @time @safetestset "PSOS Energy Conservation Tests" include("Regression_II/psos_and_energy_conservation.jl")
+    @time @safetestset "Unrolled Tests" include("Regression_II/ode_unrolled_comparison_tests.jl")
+    @time @safetestset "IIP vs OOP Tests" include("Regression_II/iipvsoop_tests.jl")
+    @time @safetestset "Issue Regression Tests" include("Regression_II/issue_regression_tests.jl")
+    return @time @safetestset "Inference Tests" include("Regression_II/inference.jl")
+end
+
+function algconvergence_i()
+    is_APPVEYOR && return
+    return @time @safetestset "Non-autonomous Convergence Tests" include("AlgConvergence_I/non-autonomous_convergence_tests.jl")
+end
+
+function algconvergence_iii()
+    is_APPVEYOR && return
+    return @time @safetestset "Split Methods Tests" include("AlgConvergence_III/split_methods_tests.jl")
+end
+
+# AD / Downstream / ODEInterfaceRegression: use SciMLTesting.activate_group_env
+# so Julia < 1.11 gets `develop_sources!` (the `[sources]` LTS backport already
+# shipped in SciMLTesting). Developing only the monorepo root left registry
+# Rosenbrock ≤2.3.2 paired with monorepo Differentiation 3.3.0 (unsatisfiable
+# after the General retrocap).
+function activate_downstream_env()
+    return activate_group_env(
+        joinpath(@__DIR__, "Downstream");
+        parent = dirname(@__DIR__),
+    )
+end
+
+function activate_odeinterface_env()
+    return activate_group_env(
+        joinpath(@__DIR__, "ODEInterfaceRegression");
+        parent = dirname(@__DIR__),
+    )
+end
+
+function activate_ad_env()
+    return activate_group_env(
+        joinpath(@__DIR__, "AD");
+        parent = dirname(@__DIR__),
+    )
+end
+
+function downstream_group()
+    is_APPVEYOR && return
+    activate_downstream_env()
+    @time @safetestset "Measurements Tests" include("Downstream/measurements.jl")
+    @time @safetestset "Time derivative Tests" include("Downstream/time_derivative_test.jl")
+    return @time @safetestset "DynamicQuantities + Measurements Tests" include("Downstream/dynamicquantities_measurements.jl")
+end
+
+function ad_group()
+    # Enzyme and Mooncake run on both AD lanes; Zygote runs on Julia <= 1.11.
+    is_APPVEYOR && return
+    activate_ad_env()
+    @time @safetestset "AD Tests" include("AD/ad_tests.jl")
+    @time @safetestset "Autodiff Events Tests" include("AD/autodiff_events.jl")
+    return @time @safetestset "Discrete Adjoint Tests" include("AD/discrete_adjoints.jl")
+end
+
+function odeinterface_group()
+    # Don't run ODEInterface tests on prerelease
+    (is_APPVEYOR || !isempty(VERSION.prerelease)) && return
+    activate_odeinterface_env()
+    @time @safetestset "Init dt vs dorpri tests" include("ODEInterfaceRegression/init_dt_vs_dopri_tests.jl")
+    return @time @safetestset "ODEInterface Regression Tests" include("ODEInterfaceRegression/odeinterface_regression.jl")
+end
+
+function qa_group()
+    is_APPVEYOR && return
+    return @time @safetestset "Quality Assurance Tests" include("qa/qa_tests.jl")
+end
+
+function activate_gpu_env()
+    Pkg.activate(joinpath(@__DIR__, "gpu"))
+    Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
+    return Pkg.instantiate()
+end
+
+# Root (integration) GPU tests. The test/gpu environment pulls the full
+# OrdinaryDiffEq stack plus the relevant sublibraries and runs on the self-hosted
+# `gpu` runner (Julia 1, where [sources] is honored natively). Every file in
+# test/gpu is included, so the set stays in sync as GPU tests are added or
+# removed there without touching this dispatch.
+function gpu_group()
+    is_APPVEYOR && return
+    activate_gpu_env()
+    gpudir = joinpath(@__DIR__, "gpu")
+    @testset "GPU Tests" begin
+        for f in sort(filter(f -> endswith(f, ".jl"), readdir(gpudir)))
+            @time @eval @safetestset $("GPU: " * f) include($(joinpath(gpudir, f)))
+        end
+    end
+    return nothing
+end
 
 @time begin
-    if GROUP == "All" || GROUP == "InterfaceI" || GROUP == "Interface"
-        @time @safetestset "Discrete Algorithm Tests" begin include("interface/discrete_algorithm_test.jl") end
-        @time @safetestset "Tstops Tests" begin include("interface/ode_tstops_tests.jl") end
-        @time @safetestset "Backwards Tests" begin include("interface/ode_backwards_test.jl") end
-        @time @safetestset "Initdt Tests" begin include("interface/ode_initdt_tests.jl") end
-        @time @safetestset "Linear Tests" begin include("interface/ode_twodimlinear_tests.jl") end
-        @time @safetestset "Differentiation Trait Tests" begin include("interface/differentiation_traits_tests.jl") end
-        @time @safetestset "Inf Tests" begin include("interface/inf_handling.jl") end
-        @time @safetestset "Jacobian Tests" begin include("interface/jacobian_tests.jl") end
-        @time @safetestset "saveat Tests" begin include("interface/ode_saveat_tests.jl") end
-        @time @safetestset "save_idxs Tests" begin include("interface/ode_saveidxs_tests.jl") end
-        @time @safetestset "Scalar Handling Tests" begin include("interface/scalar_handling_tests.jl") end
-        @time @safetestset "Static Array Tests" begin include("interface/static_array_tests.jl") end
-        @time @safetestset "u_modifed Tests" begin include("interface/umodified_test.jl") end
-        @time @safetestset "Composite Algorithm Tests" begin include("interface/composite_algorithm_test.jl") end
-        @time @safetestset "Complex Tests" begin include("interface/complex_tests.jl") end
-        @time @safetestset "Ndim Complex Tests" begin include("interface/ode_ndim_complex_tests.jl") end
-        @time @safetestset "Number Type Tests" begin include("interface/ode_numbertype_tests.jl") end
-        @time @safetestset "Stiffness Detection Tests" begin include("interface/stiffness_detection_test.jl") end
-        @time @safetestset "Composite Interpolation Tests" begin include("interface/composite_interpolation.jl") end
-        @time @safetestset "Export tests" begin include("interface/export_tests.jl") end
-        @time @safetestset "Type Handling Tests" begin include("interface/type_handling.jl") end
-        @time @safetestset "Controller Tests" begin include("interface/controllers.jl") end
-    end
+    # Monorepo sublibrary routing. The root reads GROUP to pick a `lib/<sub>`
+    # sublibrary, transitively develops its `[sources]` on Julia < 1.11, then
+    # `Pkg.test`s it with the sub-group handed off via GROUP.
+    # This is kept as an explicit pre-step (rather than delegated to
+    # `run_tests`'s built-in `lib_dir` path) so the sublibrary `Pkg.test`
+    # invocation — `julia_args`, `force_latest_compatible_version = false`,
+    # `allow_reresolve = true` — stays byte-for-byte identical to the previous
+    # runtests.jl. (`run_tests`'s sublibrary path only passes `allow_reresolve`,
+    # which would silently drop `--depwarn=yes`/`force_latest_compatible_version`.)
+    # The root group dispatch (All / Interface / Integrators / Regression / QA /
+    # functional groups) is delegated to `run_tests` below.
+    base_group, test_group = detect_sublibrary_group(GROUP, LIB_DIR)
 
-    if !is_APPVEYOR && (GROUP == "All" || GROUP == "InterfaceII" || GROUP == "Interface")
-        @time @safetestset "No Recompile Tests" begin include("interface/norecompile.jl") end
-        @time @safetestset "Linear Nonlinear Solver Tests" begin include("interface/linear_nonlinear_tests.jl") end
-        @time @safetestset "Linear Solver Tests" begin include("interface/linear_solver_test.jl") end
-        @time @safetestset "Linear Solver Split ODE Tests" begin include("interface/linear_solver_split_ode_test.jl") end
-        @time @safetestset "Sparse Diff Tests" begin include("interface/sparsediff_tests.jl") end
-        @time @safetestset "Enum Tests" begin include("interface/enums.jl") end
-        @time @safetestset "Mass Matrix Tests" begin include("interface/mass_matrix_tests.jl") end
-    end
-
-    if !is_APPVEYOR && (GROUP == "All" || GROUP == "InterfaceIII" || GROUP == "Interface")
-        @time @safetestset "Derivative Utilities Tests" begin include("interface/utility_tests.jl") end
-        @time @safetestset "DEStats Tests" begin include("interface/destats_tests.jl") end
-        @time @safetestset "No Index Tests" begin include("interface/noindex_tests.jl") end
-        @time @safetestset "Events + DAE addsteps Tests" begin include("interface/event_dae_addsteps.jl") end
-        @time @safetestset "No Jac Tests" begin include("interface/nojac.jl") end
-        @time @safetestset "Preconditioner Tests" begin include("interface/preconditioners.jl") end
-        @time @safetestset "Units Tests" begin include("interface/units_tests.jl") end
-        @time @safetestset "Non-Full Diagonal Sparsity Tests" begin include("interface/nonfulldiagonal_sparse.jl") end
-    end
-
-    if !is_APPVEYOR && (GROUP == "All" || GROUP == "InterfaceIV" || GROUP == "Interface")
-        @time @safetestset "Autodiff Error Tests" begin include("interface/autodiff_error_tests.jl") end
-        @time @safetestset "Ambiguity Tests" begin include("interface/ambiguity_tests.jl") end
-        @time @safetestset "Second Order with First Order Solver Tests" begin include("interface/second_order_with_first_order_solvers.jl") end
-    end
-
-    if !is_APPVEYOR && (GROUP == "All" || GROUP == "InterfaceV" || GROUP == "Interface")
-        @time @safetestset "AD Tests" begin include("interface/ad_tests.jl") end
-        @time @safetestset "DAE Initialize Integration" begin include("interface/dae_initialize_integration.jl") end
-    end
-
-    if !is_APPVEYOR &&
-       (GROUP == "All" || GROUP == "Integrators_I" || GROUP == "Integrators")
-        @time @safetestset "Reinit Tests" begin include("integrators/reinit_test.jl") end
-        @time @safetestset "Events Tests" begin include("integrators/ode_event_tests.jl") end
-        @time @safetestset "Alg Events Tests" begin include("integrators/alg_events_tests.jl") end
-        @time @safetestset "Discrete Callback Dual Tests" begin include("integrators/discrete_callback_dual_test.jl") end
-        @time @safetestset "Iterator Tests" begin include("integrators/iterator_tests.jl") end
-        @time @safetestset "Integrator Interface Tests" begin include("integrators/integrator_interface_tests.jl") end
-        @time @safetestset "Error Check Tests" begin include("integrators/check_error.jl") end
-        @time @safetestset "Event Detection Tests" begin include("integrators/event_detection_tests.jl") end
-        @time @safetestset "Event Repetition Detection Tests" begin include("integrators/event_repeat_tests.jl") end
-    end
-
-    if !is_APPVEYOR &&
-       (GROUP == "All" || GROUP == "Integrators_II" || GROUP == "Integrators")
-        @time @safetestset "Reverse Directioned Event Tests" begin include("integrators/rev_events_tests.jl") end
-        @time @safetestset "Differentiation Direction Tests" begin include("integrators/diffdir_tests.jl") end
-        @time @safetestset "Resize Tests" begin include("integrators/resize_tests.jl") end
-        @time @safetestset "DAE Initialization Tests" begin include("integrators/dae_initialization_tests.jl") end
-        @time @safetestset "DAE Event Tests" begin include("integrators/dae_event.jl") end
-        @time @safetestset "Cache Tests" begin include("integrators/ode_cache_tests.jl") end
-        @time @safetestset "Add Steps Tests" begin include("integrators/ode_add_steps_tests.jl") end
-        @time @safetestset "IMEX Split Function Tests" begin include("integrators/split_ode_tests.jl") end
-    end
-
-    if !is_APPVEYOR && (GROUP == "All" || GROUP == "Regression_I" || GROUP == "Regression")
-        @time @safetestset "Dense Tests" begin include("regression/ode_dense_tests.jl") end
-        @time @safetestset "Special Interp Tests" begin include("regression/special_interps.jl") end
-        @time @safetestset "Inplace Tests" begin include("regression/ode_inplace_tests.jl") end
-        @time @safetestset "Adaptive Tests" begin include("regression/ode_adaptive_tests.jl") end
-        @time @safetestset "Hard DAE Tests" begin include("regression/hard_dae.jl") end
-    end
-
-    if !is_APPVEYOR && (GROUP == "All" || GROUP == "Regression_II" || GROUP == "Regression")
-        @time @safetestset "PSOS Energy Conservation Tests" begin include("regression/psos_and_energy_conservation.jl") end
-        @time @safetestset "Unrolled Tests" begin include("regression/ode_unrolled_comparison_tests.jl") end
-        @time @safetestset "Time derivative Tests" begin include("regression/time_derivative_test.jl") end
-        @time @safetestset "IIP vs OOP Tests" begin include("regression/iipvsoop_tests.jl") end
-        @time @safetestset "Inference Tests" begin include("regression/inference.jl") end
-    end
-
-    if !is_APPVEYOR && GROUP == "AlgConvergence_I"
-        @time @safetestset "Partitioned Methods Tests" begin include("algconvergence/partitioned_methods_tests.jl") end
-        @time @safetestset "Convergence Tests" begin include("algconvergence/ode_convergence_tests.jl") end
-        @time @safetestset "DAE Convergence Tests" begin include("algconvergence/dae_convergence_tests.jl") end
-        @time @safetestset "Non-autonomous Convergence Tests" begin include("algconvergence/non-autonomous_convergence_tests.jl") end
-        @time @safetestset "Adams Variable Coefficients Tests" begin include("algconvergence/adams_tests.jl") end
-        @time @safetestset "Nordsieck Tests" begin include("algconvergence/nordsieck_tests.jl") end
-    end
-
-    if !is_APPVEYOR && GROUP == "AlgConvergence_II"
-        @time @safetestset "SSPRK Tests" begin include("algconvergence/ode_ssprk_tests.jl") end
-        @time @safetestset "Low Storage RK Tests" begin include("algconvergence/ode_low_storage_rk_tests.jl") end
-        @time @safetestset "OwrenZen Tests" begin include("algconvergence/owrenzen_tests.jl") end
-        @time @safetestset "Runge-Kutta-Chebyshev Tests" begin include("algconvergence/rkc_tests.jl") end
-    end
-
-    if !is_APPVEYOR && GROUP == "AlgConvergence_III"
-        @time @safetestset "Linear Methods Tests" begin include("algconvergence/linear_method_tests.jl") end
-        @time @safetestset "Split Methods Tests" begin include("algconvergence/split_methods_tests.jl") end
-        @time @safetestset "Rosenbrock Tests" begin include("algconvergence/ode_rosenbrock_tests.jl") end
-        @time @safetestset "FIRK Tests" begin include("algconvergence/ode_firk_tests.jl") end
-        @time @safetestset "Linear-Nonlinear Methods Tests" begin include("algconvergence/linear_nonlinear_convergence_tests.jl") end
-        @time @safetestset "Linear-Nonlinear Krylov Methods Tests" begin include("algconvergence/linear_nonlinear_krylov_tests.jl") end
-        @time @safetestset "Feagin Tests" begin include("algconvergence/ode_feagin_tests.jl") end
-        @time @safetestset "Extrapolation Tests" begin include("algconvergence/ode_extrapolation_tests.jl") end
-        @time @safetestset "Symplectic Tests" begin include("algconvergence/symplectic_tests.jl") end
-    end
-
-    if !is_APPVEYOR && GROUP == "Downstream"
-        activate_downstream_env()
-        @time @safetestset "DelayDiffEq Tests" begin include("downstream/delaydiffeq.jl") end
-        @time @safetestset "Autodiff Events Tests" begin include("downstream/autodiff_events.jl") end
-    end
-
-    if !is_APPVEYOR && GROUP == "ODEInterfaceRegression"
-        activate_downstream_env()
-        @time @safetestset "Init dt vs dorpri tests" begin include("odeinterface/init_dt_vs_dopri_tests.jl") end
-        @time @safetestset "ODEInterface Regression Tests" begin include("odeinterface/odeinterface_regression.jl") end
-    end
-
-    if !is_APPVEYOR && GROUP == "Multithreading"
-        @time @safetestset "Extrapolation Tests" begin include("multithreading/ode_extrapolation_tests.jl") end
-    end
-
-    if !is_APPVEYOR && GROUP == "GPU"
-        activate_downstream_env()
-        @time @safetestset "Simple GPU" begin
-            import OrdinaryDiffEq
-            include(joinpath(dirname(pathof(OrdinaryDiffEq.DiffEqBase)), "..",
-                             "test/gpu/simple_gpu.jl"))
+    if !isempty(base_group) && isdir(joinpath(LIB_DIR, base_group))
+        Pkg.activate(joinpath(LIB_DIR, base_group))
+        # On Julia < 1.11, the [sources] section in Project.toml is not supported.
+        # Manually Pkg.develop local path dependencies so CI tests the PR branch code.
+        # We resolve transitively: each developed dependency's own [sources] are also
+        # developed, so that packages like OrdinaryDiffEqRosenbrockTableaus (a source
+        # dependency of OrdinaryDiffEqRosenbrock) are correctly found even when testing
+        # a higher-level sublibrary like OrdinaryDiffEqDefault.
+        if VERSION < v"1.11.0-DEV.0"
+            developed = Set{String}()
+            # Never develop the active project: when sublibraries cyclically
+            # reference each other via [sources] (e.g. DiffEqDevTools points
+            # back at OrdinaryDiffEqCore), the transitive walk below would
+            # otherwise try to `Pkg.develop` the active project itself, which
+            # Pkg refuses with "package <X> has the same name or UUID as the
+            # active project".
+            push!(developed, normpath(joinpath(LIB_DIR, base_group)))
+            specs = Pkg.PackageSpec[]
+            queue = [joinpath(LIB_DIR, base_group)]
+            while !isempty(queue)
+                pkg_dir = popfirst!(queue)
+                toml_path = joinpath(pkg_dir, "Project.toml")
+                isfile(toml_path) || continue
+                toml = Pkg.TOML.parsefile(toml_path)
+                if haskey(toml, "sources")
+                    for (dep_name, source_spec) in toml["sources"]
+                        if source_spec isa Dict && haskey(source_spec, "path")
+                            dep_path = normpath(joinpath(pkg_dir, source_spec["path"]))
+                            if isdir(dep_path) && !(dep_path in developed)
+                                push!(developed, dep_path)
+                                @info "Queuing local source dependency" dep_name dep_path
+                                push!(specs, Pkg.PackageSpec(path = dep_path))
+                                # Queue this dependency so its own [sources] are also resolved.
+                                push!(queue, dep_path)
+                            end
+                        end
+                    end
+                end
+            end
+            # Batch the develop call so Pkg resolves all path deps together;
+            # calling it one-at-a-time would re-resolve the active project and
+            # fail to find unregistered siblings.
+            isempty(specs) || Pkg.develop(specs)
         end
-        @time @safetestset "Autoswitch GPU" begin include("gpu/autoswitch.jl") end
-        @time @safetestset "Linear LSRK GPU" begin include("gpu/linear_lsrk.jl") end
-        @time @safetestset "Reaction-Diffusion Stiff Solver GPU" begin include("gpu/reaction_diffusion_stiff.jl") end
+        withenv("GROUP" => test_group) do
+            Pkg.test(base_group, julia_args = ["--check-bounds=auto", "--compiled-modules=yes", "--depwarn=yes"], force_latest_compatible_version = false, allow_reresolve = true)
+        end
+    else
+        # Root-package group dispatch. `run_tests` owns the All / Interface /
+        # Integrators / Regression / QA / functional-group routing that the old
+        # hand-written `if GROUP == ...` ladder expressed. The group bodies
+        # `@safetestset include` files from the per-group `test/<GroupKey>/`
+        # folders (the v1.2 folder layout).
+        run_tests(;
+            # No root "Core" body: the previous runtests.jl had no Core branch.
+            # A no-op core keeps GROUP=Core a no-op (matching the old behavior)
+            # and is excluded from `all`.
+            core = () -> nothing,
+            groups = Dict(
+                "InterfaceI" => interface_i,
+                "InterfaceII" => interface_ii,
+                "InterfaceIII" => interface_iii,
+                "InterfaceIV" => interface_iv,
+                "InterfaceV" => interface_v,
+                "Integrators_I" => integrators_i,
+                "Integrators_II" => integrators_ii,
+                "Regression_I" => regression_i,
+                "Regression_II" => regression_ii,
+                "AlgConvergence_I" => algconvergence_i,
+                "AlgConvergence_III" => algconvergence_iii,
+                "Downstream" => downstream_group,
+                "AD" => ad_group,
+                "ODEInterfaceRegression" => odeinterface_group,
+                "GPU" => gpu_group,
+            ),
+            # QA runs in the root test environment (no per-group Project.toml);
+            # its body is the ExplicitImports testset, not the standard
+            # Aqua/JET `run_qa`.
+            qa = qa_group,
+            # `All` runs exactly the Interface/Integrators/Regression functional
+            # groups (in this order), matching the previous `GROUP == "All"`
+            # branches. It deliberately EXCLUDES QA, AlgConvergence_*,
+            # Downstream, AD, and ODEInterfaceRegression — none of which the old
+            # `All` branch ran.
+            all = [
+                "InterfaceI", "InterfaceII", "InterfaceIII", "InterfaceIV", "InterfaceV",
+                "Integrators_I", "Integrators_II",
+                "Regression_I", "Regression_II",
+            ],
+            # Umbrella groups: one GROUP value triggers several functional
+            # groups, reproducing the old `GROUP == "Interface"` /
+            # `"Integrators"` / `"Regression"` branches.
+            umbrellas = Dict(
+                "Interface" => ["InterfaceI", "InterfaceII", "InterfaceIII", "InterfaceIV", "InterfaceV"],
+                "Integrators" => ["Integrators_I", "Integrators_II"],
+                "Regression" => ["Regression_I", "Regression_II"],
+            ),
+            # The root and each sublibrary use GROUP for monorepo routing.
+            # sublibrary Pkg.test is done explicitly above; sublib_env/lib_dir
+            # are passed for completeness so the routing config is self-describing.
+            sublib_env = "GROUP",
+            lib_dir = LIB_DIR,
+        )
     end
 end # @time
